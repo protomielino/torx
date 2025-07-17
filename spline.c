@@ -160,9 +160,9 @@ void Spline_DrawSelf(Spline *this, float ox, float oy, Color col)
         for (float t = 0; t < (float)arrlen(this->points) - 0; t += 0.01f) {
             Point2D pos = Spline_GetSplinePoint(this, t);
 
-            int pixel_sx, pixel_sy;
-            WorldToScreen(pos.x, pos.y, &pixel_sx, &pixel_sy);
-            DrawPixel(pixel_sx, pixel_sy, WHITE);
+            Vector2 pixel_s;
+            pixel_s = WorldToScreen((Vector2){ pos.x, pos.y });
+            DrawPixel(pixel_s.x, pixel_s.y, col);
 
             DrawPixel(pos.x, pos.y, col);
         }
@@ -175,14 +175,4 @@ void Spline_DrawSelf(Spline *this, float ox, float oy, Color col)
             DrawPixel(pos.x, pos.y, col);
         }
     }
-}
-
-pair pair_ctor()
-{
-    return (pair){ 0.0f, 0.0f };
-}
-
-pair pair_new(float p1, float p2)
-{
-    return (pair){ p1, p2 };
 }

@@ -1,10 +1,13 @@
 #ifndef MATHS_H_
 #define MATHS_H_
 
+#include <raylib.h>
+#include <raymath.h>
+
 // Convert coordinates from World Space --> Screen Space
-void WorldToScreen(float worldX, float worldY, int *screenX, int *screenY);
+Vector2 WorldToScreen(Vector2 world);
 // Convert coordinates from Screen Space --> World Space
-void ScreenToWorld(int screenX, int screenY, float *worldX, float *worldY);
+Vector2 ScreenToWorld(Vector2 screen);
 float function (float x);
 
 

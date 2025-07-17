@@ -17,18 +17,16 @@
 #define WIDTH 1000
 #define HEIGHT 700
 
+Vector2 WINDOW_DIM = { WIDTH, HEIGHT };
+
 
 // pan-zoom variables
-float offsetX = 0.0f;
-float offsetY = 0.0f;
-float scaleX = 1.0f;
-float scaleY = 1.0f;
+Vector2 offset = { 0.0f, 0.0f };
+Vector2 scale = { 1.0f, 1.0f };
 
-float startPanX = 0.0f;
-float startPanY = 0.0f;
+Vector2 startPan = { 0.0f, 0.0f };
 
-float selectedCellX = 0.0f;
-float selectedCellY = 0.0f;
+Vector2 selectedCell = { 0.0f, 0.0f };
 
 // track-lines variables
 Spline path, trackLeft, trackRight, racingLine;    // Various splines
@@ -37,36 +35,36 @@ float displacement[20] = {0}; // Displacement along spline node normal
 int iterations;
 float marker;
 int selectedNode;
-pair *modelCar;
+Vector2 *modelCar;
 
-void DrawWireFrameModel(const pair *vecModelCoordinates, float x, float y, float r, float s, Color col)
+void DrawWireFrameModel(const Vector2 *vecModelCoordinates, float x, float y, float r, float s, Color col)
 {
-    // pair.p1  = x coordinate
-    // pair.p2 = y coordinate
+    // pair.x  = x coordinate
+    // pair.y = y coordinate
 
     // Create translated model vector of coordinate pairs
-    pair *vecTransformedCoordinates = NULL;
+    Vector2 *vecTransformedCoordinates = NULL;
     int verts = arrlen(vecModelCoordinates);
     arrsetlen(vecTransformedCoordinates, verts);
 
     // Rotate
     for (int i = 0; i < verts; i++) {
-        vecTransformedCoordinates[i].p1 = vecModelCoordinates[i].p1 * cosf(r) - vecModelCoordinates[i].p2 * sinf(r);
-        vecTransformedCoordinates[i].p2 = vecModelCoordinates[i].p1  * sinf(r) + vecModelCoordinates[i].p2 * cosf(r);
+        vecTransformedCoordinates[i].x = vecModelCoordinates[i].x * cosf(r) - vecModelCoordinates[i].y * sinf(r);
+        vecTransformedCoordinates[i].y = vecModelCoordinates[i].x  * sinf(r) + vecModelCoordinates[i].y * cosf(r);
     }
 
     // Scale
     for (int i = 0; i < verts; i++)
     {
-        vecTransformedCoordinates[i].p1  = vecTransformedCoordinates[i].p1  * s;
-        vecTransformedCoordinates[i].p2 = vecTransformedCoordinates[i].p2 * s;
+        vecTransformedCoordinates[i].x  = vecTransformedCoordinates[i].x  * s;
+        vecTransformedCoordinates[i].y = vecTransformedCoordinates[i].y * s;
     }
 
     // Translate
     for (int i = 0; i < verts; i++)
     {
-        vecTransformedCoordinates[i].p1  = vecTransformedCoordinates[i].p1  + x;
-        vecTransformedCoordinates[i].p2 = vecTransformedCoordinates[i].p2 + y;
+        vecTransformedCoordinates[i].x  = vecTransformedCoordinates[i].x  + x;
+        vecTransformedCoordinates[i].y = vecTransformedCoordinates[i].y + y;
     }
 
     // Draw Closed Polygon
@@ -74,8 +72,8 @@ void DrawWireFrameModel(const pair *vecModelCoordinates, float x, float y, float
     {
         int j = (i + 1);
         DrawLineEx(
-                (Vector2){(int)vecTransformedCoordinates[i % verts].p1 , (int)vecTransformedCoordinates[i % verts].p2},
-                (Vector2){(int)vecTransformedCoordinates[j % verts].p1 , (int)vecTransformedCoordinates[j % verts].p2},
+                (Vector2){(int)vecTransformedCoordinates[i % verts].x , (int)vecTransformedCoordinates[i % verts].y},
+                (Vector2){(int)vecTransformedCoordinates[j % verts].x , (int)vecTransformedCoordinates[j % verts].y},
                 5, col);
     }
 }
@@ -123,13 +121,13 @@ bool buildTrack()
     }
 
 
-    arrput(modelCar, pair_new( 2,  0 ));
-    arrput(modelCar, pair_new( 0, -1 ));
-    arrput(modelCar, pair_new( 0,  1 ));
+    arrput(modelCar, ((Vector2){ 2,  0 }));
+    arrput(modelCar, ((Vector2){ 0, -1 }));
+    arrput(modelCar, ((Vector2){ 0,  1 }));
 
     for (int i = 0; i < arrlen(modelCar); i++) {
-        modelCar[i].p1 *= 4;
-        modelCar[i].p2 *= 3;
+        modelCar[i].x *= 4;
+        modelCar[i].y *= 3;
     }
 
     Spline_UpdateSplineProperties(&path);
@@ -146,8 +144,8 @@ int main(int argc, char **argv)
     // pan-zoom
     //----------------------------------------------------------------------------------
     // Initialise offset so 0,0 in world space is middle of the screen
-    offsetX = -WIDTH / 2;
-    offsetY = -HEIGHT / 2;
+    offset = (Vector2){ -WIDTH/2, -HEIGHT/2 };
+    scale = Vector2One();
 
     //----------------------------------------------------------------------------------
     // track-lines
@@ -182,50 +180,55 @@ int main(int argc, char **argv)
         // pan-zoom
         //----------------------------------------------------------------------------------
         // Just grab a copy of mouse coordinates for convenience
-        float mouseX = (float)GetMouseX();
-        float mouseY = (float)GetMouseY();
+        Vector2 mouse = { (float)GetMouseX(), (float)GetMouseY()};
 
         // For panning, we need to capture the screen location when the user starts
         // to pan...
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            startPanX = mouseX;
-            startPanY = mouseY;
+            startPan = mouse;
         }
 
         // ...as the mouse moves, the screen location changes. Convert this screen
         // coordinate change into world coordinates to implement the pan. Simples.
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            offsetX -= (mouseX - startPanX) / scaleX;
-            offsetY -= (mouseY - startPanY) / scaleY;
+            offset = Vector2Subtract(
+                    offset,
+                    Vector2Divide(
+                            Vector2Subtract(
+                                    mouse,
+                                    startPan),
+                            scale));
 
             // Start "new" pan for next epoch
-            startPanX = mouseX;
-            startPanY = mouseY;
+            startPan = mouse;
         }
 
         // For zoom, we need to extract the location of the cursor before and after the
         // scale is changed. Here we get the cursor and translate into world space...
-        float mouseWorldX_BeforeZoom, mouseWorldY_BeforeZoom;
-        ScreenToWorld(mouseX, mouseY, &mouseWorldX_BeforeZoom, &mouseWorldY_BeforeZoom);
+        Vector2 mouseWorld_BeforeZoom = {};
+        mouseWorld_BeforeZoom = ScreenToWorld(mouse);
 
 
         // ...change the scale as required...
         if (GetMouseWheelMove() > 0) {
-            scaleX *= 1.1f;
-            scaleY *= 1.1f;
+            scale.x *= 1.1f;
+            scale.y *= 1.1f;
         } else if (GetMouseWheelMove() < 0) {
-            scaleX *= 0.9f;
-            scaleY *= 0.9f;
+            scale.x *= 0.9f;
+            scale.y *= 0.9f;
         }
 
         // ...now get the location of the cursor in world space again - It will have changed
         // because the scale has changed, but we can offset our world now to fix the zoom
         // location in screen space, because we know how much it changed laterally between
         // the two spatial scales. Neat huh? ;-)
-        float mouseWorldX_AfterZoom, mouseWorldY_AfterZoom;
-        ScreenToWorld(mouseX, mouseY, &mouseWorldX_AfterZoom, &mouseWorldY_AfterZoom);
-        offsetX += (mouseWorldX_BeforeZoom - mouseWorldX_AfterZoom);
-        offsetY += (mouseWorldY_BeforeZoom - mouseWorldY_AfterZoom);
+        Vector2 mouseWorld_AfterZoom = {};;
+        mouseWorld_AfterZoom = ScreenToWorld(mouse);
+        offset = Vector2Add(
+                offset,
+                Vector2Subtract(
+                        mouseWorld_BeforeZoom,
+                        mouseWorld_AfterZoom));
 
         //----------------------------------------------------------------------------------
         // track-lines
@@ -300,9 +303,13 @@ int main(int argc, char **argv)
             //----------------------------------------------------------------------------------
 
             // Clip
-            float worldLeft, worldTop, worldRight, worldBottom;
-            ScreenToWorld(0, 0, &worldLeft, &worldTop);
-            ScreenToWorld(WIDTH, HEIGHT, &worldRight, &worldBottom);
+
+            Vector2 worldNW = ScreenToWorld((Vector2){0,0});
+            float worldLeft = worldNW.x;
+            float worldTop = worldNW.y;
+            Vector2 worldSE = ScreenToWorld(WINDOW_DIM);
+            float worldRight = worldSE.x;
+            float worldBottom = worldSE.y;
 
 
             // Draw Main Axes a 10x10 Unit Grid
@@ -310,15 +317,16 @@ int main(int argc, char **argv)
             int linesDrawn = 0;
             for (float y = 0.0f; y <= 10.0f; y++) {
                 if (y >= worldTop && y <= worldBottom) {
-                    float sx = 0.0f, sy = y;
-                    float ex = 10.0f, ey = y;
+                    Vector2 s = { 0.0f, y };
+                    Vector2 e = { 10.0f, y };
 
-                    int pixel_sx, pixel_sy, pixel_ex, pixel_ey;
+                    Vector2 pixel_s = {};
+                    Vector2 pixel_e = {};
 
-                    WorldToScreen(sx, sy, &pixel_sx, &pixel_sy);
-                    WorldToScreen(ex, ey, &pixel_ex, &pixel_ey);
+                    pixel_s = WorldToScreen(s);
+                    pixel_e = WorldToScreen(e);
 
-                    DrawLine(pixel_sx, pixel_sy, pixel_ex, pixel_ey, WHITE);
+                    DrawLine(pixel_s.x, pixel_s.y, pixel_e.x, pixel_e.y, WHITE);
                     linesDrawn++;
                 }
             }
@@ -326,15 +334,16 @@ int main(int argc, char **argv)
             // Draw 10 vertical lines
             for (float x = 0.0f; x <= 10.0f; x++) {
                 if (x >= worldLeft && x <= worldRight) {
-                    float sx = x, sy = 0.0f;
-                    float ex = x, ey = 10.0f;
+                    Vector2 s = { x, 0.0f };
+                    Vector2 e = { x, 10.0f };
 
-                    int pixel_sx, pixel_sy, pixel_ex, pixel_ey;
+                    Vector2 pixel_s = {};
+                    Vector2 pixel_e = {};
 
-                    WorldToScreen(sx, sy, &pixel_sx, &pixel_sy);
-                    WorldToScreen(ex, ey, &pixel_ex, &pixel_ey);
+                    pixel_s = WorldToScreen(s);
+                    pixel_e = WorldToScreen(e);
 
-                    DrawLine(pixel_sx, pixel_sy, pixel_ex, pixel_ey, WHITE);
+                    DrawLine(pixel_s.x, pixel_s.y, pixel_e.x, pixel_e.y, WHITE);
                     linesDrawn++;
                 }
             }
@@ -344,30 +353,34 @@ int main(int argc, char **argv)
             // We can easily determine where the mouse is in world space. In fact we already
             // have this frame so just reuse the values
             if (IsMouseButtonReleased(MOUSE_MIDDLE_BUTTON)) {
-                selectedCellX = (int)mouseWorldX_AfterZoom;
-                selectedCellY = (int)mouseWorldY_AfterZoom;
+                selectedCell = (Vector2){(int)mouseWorld_AfterZoom.x, (int)mouseWorld_AfterZoom.y};
             }
 
             // Draw selected cell by filling with red circle. Convert cell coords
             // into screen space, also scale the radius
-            int cx, cy, cr;
-            WorldToScreen(selectedCellX + 0.5f, selectedCellY + 0.5f, &cx, &cy);
-            cr = 0.3f * scaleX;
-            DrawCircle(cx, cy, cr, RED);
+            Vector2 c;
+            int cr;
+            c = WorldToScreen(Vector2AddValue(selectedCell, 0.5f));
+            cr = 0.3f * scale.x;
+            DrawCircle(c.x, c.y, cr, RED);
             DrawText(TextFormat("Lines Drawn: %d", linesDrawn), 2, 2, 10, WHITE);       // Draw text (using default font)
 
 
             // Draw Chart
             float worldPerScreenWidthPixel = (worldRight - worldLeft) / WIDTH;
 //            float worldPerScreenHeightPixel = (worldBottom - worldTop) / HEIGHT;
-            int px, py, opx = 0, opy = 0;
-            WorldToScreen(worldLeft-worldPerScreenWidthPixel, -function((worldLeft - worldPerScreenWidthPixel) - 5.0f) + 5.0f, &opx, &opy);
+            Vector2 p;
+            Vector2 op = {};
+            op = WorldToScreen(
+                        (Vector2){
+                            worldLeft - worldPerScreenWidthPixel,
+                            -function((worldLeft - worldPerScreenWidthPixel) - 5.0f) + 5.0f
+                        });
             for (float x = worldLeft; x < worldRight; x+=worldPerScreenWidthPixel) {
                 float y = -function(x - 5.0f) + 5.0f;
-                WorldToScreen(x, y, &px, &py);
-                DrawLine(opx, opy, px, py, GREEN);
-                opx = px;
-                opy = py;
+                p = WorldToScreen((Vector2){ x, y });
+                DrawLine(op.x, op.y, p.x, p.y, GREEN);
+                op = p;
             }
 
 
@@ -438,7 +451,7 @@ int main(int argc, char **argv)
                     displacement[i] += (dp * 0.3f);
 
                     // Curvature
-                    displacement[(i + 1) % arrlen(racingLine.points)] += dp * -0.2f;
+//                    displacement[(i + 1) % arrlen(racingLine.points)] += dp * -0.2f;
                     displacement[(i - 1 + arrlen(racingLine.points)) % arrlen(racingLine.points)] += dp * -0.2f;
                 }
 
@@ -457,20 +470,21 @@ int main(int argc, char **argv)
             }
 
             Spline_DrawSelf(&path, 0, 0, WHITE);
-//            Spline_DrawSelf(&trackLeft, 0, 0, RED);
-//            Spline_DrawSelf(&trackRight, 0, 0, GREEN);
+            Spline_DrawSelf(&trackLeft, 0, 0, RED);
+            Spline_DrawSelf(&trackRight, 0, 0, GREEN);
 
-//            Spline_UpdateSplineProperties(&racingLine);
-//            Spline_DrawSelf(&racingLine, 0, 0, YELLOW);
+            Spline_UpdateSplineProperties(&racingLine);
+            Spline_DrawSelf(&racingLine, 0, 0, YELLOW);
 
             for (int i = 0; i < arrlen(path.points); i++) {
-                Point2D p = path.points[i];
-                DrawCircle(p.x, p.y, 5, RED);
+                Vector2 point = (Vector2){ path.points[i].x, path.points[i].y };
+                Vector2 p_screen = WorldToScreen(point);
+                DrawCircle(p_screen.x, p_screen.y, 5, RED);
             }
 
-//            Point2D car_p = Spline_GetSplinePoint(&racingLine, marker);
-//            Point2D car_g = Spline_GetSplineGradient(&racingLine, marker);
-//            DrawWireFrameModel(modelCar, car_p.x, car_p.y, atan2f(car_g.y, car_g.x), 4.0f, WHITE);
+            Point2D car_p = Spline_GetSplinePoint(&racingLine, marker);
+            Point2D car_g = Spline_GetSplineGradient(&racingLine, marker);
+            DrawWireFrameModel(modelCar, car_p.x, car_p.y, atan2f(car_g.y, car_g.x), 4.0f, WHITE);
 
             DrawFPS(20, 20);
         } EndDrawing();

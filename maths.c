@@ -1,23 +1,23 @@
 #include "maths.h"
 
 // pan-zoom variables
-extern float offsetX;
-extern float offsetY;
-extern float scaleX;
-extern float scaleY;
+extern Vector2 offset;
+extern Vector2 scale;
 
 // Convert coordinates from World Space --> Screen Space
-void WorldToScreen(float worldX, float worldY, int *screenX, int *screenY)
+Vector2 WorldToScreen(Vector2 world)
 {
-    *screenX = (int)((worldX - offsetX) * scaleX);
-    *screenY = (int)((worldY - offsetY) * scaleY);
+    Vector2 screen = Vector2Multiply(Vector2Subtract(world, offset), scale);
+    screen = (Vector2) { (int)screen.x, (int)screen.y};
+    return screen;
 }
 
 // Convert coordinates from Screen Space --> World Space
-void ScreenToWorld(int screenX, int screenY, float *worldX, float *worldY)
+Vector2 ScreenToWorld(Vector2 screen)
 {
-    *worldX = ((float)screenX / scaleX) + offsetX;
-    *worldY = ((float)screenY / scaleY) + offsetY;
+    Vector2 scr = { (float)screen.x, (float)screen.y};
+    Vector2 world = Vector2Add(Vector2Divide(scr, scale), offset);
+    return world;
 }
 
 float function (float x)

@@ -29,12 +29,4 @@ float Spline_GetNormalisedOffset(Spline *this, float p);
 void Spline_UpdateSplineProperties(Spline *this);
 void Spline_DrawSelf(Spline *this, float ox, float oy, Color col);
 
-typedef struct
-{
-    float p1;
-    float p2;
-} pair;
-pair pair_ctor();
-pair pair_new(float p1, float p2);
-
 #endif /* SPLINE_H_ */
