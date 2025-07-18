@@ -21,6 +21,7 @@ Vector2 WINDOW_DIM = { WIDTH, HEIGHT };
 
 
 // pan-zoom variables
+bool panning;
 Vector2 offset = { 0.0f, 0.0f };
 Vector2 scale = { 1.0f, 1.0f };
 
@@ -115,10 +116,10 @@ bool buildTrack()
     arrput(path.points, Point2D_new(  30.0f, 198.0f, 0.0f ));
     arrput(path.points, Point2D_new(  48.0f, 210.0f, 0.0f ));
 
-    for (int i = 0; i < arrlen(path.points); i++) {
-        path.points[i].x *= 4;
-        path.points[i].y *= 3;
-    }
+//    for (int i = 0; i < arrlen(path.points); i++) {
+//        path.points[i].pos.x = (path.points[i].pos.x -WIDTH/2) * 4.0f;
+//        path.points[i].pos.y = (path.points[i].pos.y -HEIGHT/2) * 3.0f;;
+//    }
 
 
     arrput(modelCar, ((Vector2){ 2,  0 }));
@@ -180,33 +181,35 @@ int main(int argc, char **argv)
         // pan-zoom
         //----------------------------------------------------------------------------------
         // Just grab a copy of mouse coordinates for convenience
-        Vector2 mouse = { (float)GetMouseX(), (float)GetMouseY()};
+        Vector2 mouse_scren = { (float)GetMouseX(), (float)GetMouseY()};
+        Vector2 mouse_world = ScreenToWorld(mouse_scren);
 
-        // For panning, we need to capture the screen location when the user starts
-        // to pan...
-        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-            startPan = mouse;
+        if (IsKeyDown(KEY_SPACE)) {
+            // For panning, we need to capture the screen location when the user starts
+            // to pan...
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                startPan = mouse_scren;
+            }
+
+            // ...as the mouse moves, the screen location changes. Convert this screen
+            // coordinate change into world coordinates to implement the pan. Simples.
+            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+                offset = Vector2Subtract(
+                        offset,
+                        Vector2Divide(
+                                Vector2Subtract(
+                                        mouse_scren,
+                                        startPan),
+                                        scale));
+
+                // Start "new" pan for next epoch
+                startPan = mouse_scren;
+            }
         }
-
-        // ...as the mouse moves, the screen location changes. Convert this screen
-        // coordinate change into world coordinates to implement the pan. Simples.
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            offset = Vector2Subtract(
-                    offset,
-                    Vector2Divide(
-                            Vector2Subtract(
-                                    mouse,
-                                    startPan),
-                            scale));
-
-            // Start "new" pan for next epoch
-            startPan = mouse;
-        }
-
         // For zoom, we need to extract the location of the cursor before and after the
         // scale is changed. Here we get the cursor and translate into world space...
         Vector2 mouseWorld_BeforeZoom = {};
-        mouseWorld_BeforeZoom = ScreenToWorld(mouse);
+        mouseWorld_BeforeZoom = ScreenToWorld(mouse_scren);
 
 
         // ...change the scale as required...
@@ -223,7 +226,7 @@ int main(int argc, char **argv)
         // location in screen space, because we know how much it changed laterally between
         // the two spatial scales. Neat huh? ;-)
         Vector2 mouseWorld_AfterZoom = {};;
-        mouseWorld_AfterZoom = ScreenToWorld(mouse);
+        mouseWorld_AfterZoom = ScreenToWorld(mouse_scren);
         offset = Vector2Add(
                 offset,
                 Vector2Subtract(
@@ -233,14 +236,6 @@ int main(int argc, char **argv)
         //----------------------------------------------------------------------------------
         // track-lines
         //----------------------------------------------------------------------------------
-        // Handle iteration count
-        if (IsKeyDown(KEY_A)) {
-        }
-
-        // Check if node is selected with mouse
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-        }
-
 
         // Handle iteration count
         if (IsKeyDown(KEY_A)) {
@@ -254,7 +249,7 @@ int main(int argc, char **argv)
         // Check if node is selected with mouse
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
             for (int i = 0; i < arrlen(path.points); i++) {
-                float d = sqrtf(powf(path.points[i].x - GetMouseX(), 2) + powf(path.points[i].y - GetMouseY(), 2));
+                float d = sqrtf(powf(path.points[i].pos.x - mouse_world.x, 2) + powf(path.points[i].pos.y - mouse_world.y, 2));
                 if (d < 10.0f) {
                     selectedNode = i;
                     break;
@@ -267,8 +262,8 @@ int main(int argc, char **argv)
 
         // Move selected node
         if (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && selectedNode >= 0) {
-            path.points[selectedNode].x = GetMouseX();
-            path.points[selectedNode].y = GetMouseY();
+            path.points[selectedNode].pos.x = mouse_world.x;
+            path.points[selectedNode].pos.y = mouse_world.y;
             Spline_UpdateSplineProperties(&path);
         }
 
@@ -279,16 +274,16 @@ int main(int argc, char **argv)
             marker -= (float)racingLine.totalSplineLength;
 
         // Calculate track boundary points
-        float trackWidth = 25.0f;
+        float trackWidth = 10.0f;
         for (int i = 0; i < arrlen(path.points); i++) {
-            Point2D p1 = Spline_GetSplinePoint(&path, i);
-            Point2D g1 = Spline_GetSplineGradient(&path, i);
+            Vector2 p1 = Spline_GetSplinePoint(&path, i);
+            Vector2 g1 = Spline_GetSplineGradient(&path, i);
             float glen = sqrtf(g1.x*g1.x + g1.y*g1.y);
 
-            trackLeft.points[i].x  = p1.x + trackWidth * ( -g1.y / glen );
-            trackLeft.points[i].y  = p1.y + trackWidth * (  g1.x / glen );
-            trackRight.points[i].x = p1.x - trackWidth * ( -g1.y / glen );
-            trackRight.points[i].y = p1.y - trackWidth * (  g1.x / glen );
+            trackLeft.points[i].pos.x  = p1.x + trackWidth * ( -g1.y / glen );
+            trackLeft.points[i].pos.y  = p1.y + trackWidth * (  g1.x / glen );
+            trackRight.points[i].pos.x = p1.x - trackWidth * ( -g1.y / glen );
+            trackRight.points[i].pos.y = p1.y - trackWidth * (  g1.x / glen );
         }
 
         //----------------------------------------------------------------------------------
@@ -368,7 +363,7 @@ int main(int argc, char **argv)
 
             // Draw Chart
             float worldPerScreenWidthPixel = (worldRight - worldLeft) / WIDTH;
-//            float worldPerScreenHeightPixel = (worldBottom - worldTop) / HEIGHT;
+            //float worldPerScreenHeightPixel = (worldBottom - worldTop) / HEIGHT;
             Vector2 p;
             Vector2 op = {};
             op = WorldToScreen(
@@ -391,18 +386,18 @@ int main(int argc, char **argv)
             // Draw Track
             float res = 0.1f;
             for (float t = 0.0f; t < arrlen(path.points); t += res) {
-#if 0
-                Point2D pl1 = Spline_GetSplinePoint(&trackLeft, t);
-                Point2D pr1 = Spline_GetSplinePoint(&trackRight, t);
-                Point2D pl2 = Spline_GetSplinePoint(&trackLeft, t + res);
-                Point2D pr2 = Spline_GetSplinePoint(&trackRight, t + res);
+#if 1
+                Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, t));
+                Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&trackRight, t));
+                Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, t + res));
+                Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&trackRight, t + res));
 
-                DrawTriangle(
+                DrawTriangleLines(
                         (Vector2){pr1.x, pr1.y},
                         (Vector2){pl1.x, pl1.y},
                         (Vector2){pr2.x, pr2.y},
                         GRAY);
-                DrawTriangle(
+                DrawTriangleLines(
                         (Vector2){pl1.x, pl1.y},
                         (Vector2){pl2.x, pl2.y},
                         (Vector2){pr2.x, pr2.y},
@@ -425,22 +420,22 @@ int main(int argc, char **argv)
                     Point2D pointMiddle = racingLine.points[i];
 
                     // Create vectors to neighbours
-                    Point2D vectorLeft = { pointLeft.x - pointMiddle.x, pointLeft.y - pointMiddle.y };
-                    Point2D vectorRight = { pointRight.x - pointMiddle.x, pointRight.y - pointMiddle.y };
+                    Vector2 vectorLeft  = { pointLeft.pos.x - pointMiddle.pos.x, pointLeft.pos.y - pointMiddle.pos.y };
+                    Vector2 vectorRight = { pointRight.pos.x - pointMiddle.pos.x, pointRight.pos.y - pointMiddle.pos.y };
 
                     // Normalise neighbours
                     float lengthLeft = sqrtf(vectorLeft.x*vectorLeft.x + vectorLeft.y*vectorLeft.y);
-                    Point2D leftn = { vectorLeft.x / lengthLeft, vectorLeft.y / lengthLeft };
+                    Vector2 leftn = { vectorLeft.x / lengthLeft, vectorLeft.y / lengthLeft };
                     float lengthRight = sqrtf(vectorRight.x*vectorRight.x + vectorRight.y*vectorRight.y);
-                    Point2D rightn = { vectorRight.x / lengthRight, vectorRight.y / lengthRight };
+                    Vector2 rightn = { vectorRight.x / lengthRight, vectorRight.y / lengthRight };
 
                     // Add together to create bisector vector
-                    Point2D vectorSum = { rightn.x + leftn.x, rightn.y + leftn.y };
+                    Vector2 vectorSum = Vector2Add(rightn, leftn);;
                     float len = sqrtf(vectorSum.x*vectorSum.x + vectorSum.y*vectorSum.y);
-                    vectorSum.x /= len; vectorSum.y /= len;
+                    vectorSum = Vector2Scale(vectorSum, 1/len);
 
                     // Get point gradient and normalise
-                    Point2D g = Spline_GetSplineGradient(&path, i);
+                    Vector2 g = Spline_GetSplineGradient(&path, i);
                     float glen = sqrtf(g.x*g.x + g.y*g.y);
                     g.x /= glen; g.y /= glen;
 
@@ -451,21 +446,23 @@ int main(int argc, char **argv)
                     displacement[i] += (dp * 0.3f);
 
                     // Curvature
-//                    displacement[(i + 1) % arrlen(racingLine.points)] += dp * -0.2f;
+                    //displacement[(i + 1) % arrlen(racingLine.points)] += dp * -0.2f;
                     displacement[(i - 1 + arrlen(racingLine.points)) % arrlen(racingLine.points)] += dp * -0.2f;
                 }
 
                 // Clamp displaced points to track width
                 for (int i = 0; i < arrlen(racingLine.points); i++) {
-                    if (displacement[i] >= trackWidth) displacement[i] = trackWidth;
-                    if (displacement[i] <= -trackWidth) displacement[i] = -trackWidth;
+                    if (displacement[i] >=  trackWidth)
+                        displacement[i] =  trackWidth;
+                    if (displacement[i] <= -trackWidth)
+                        displacement[i] = -trackWidth;
 
-                    Point2D g = Spline_GetSplineGradient(&path, i);
+                    Vector2 g = Spline_GetSplineGradient(&path, i);
                     float glen = sqrtf(g.x*g.x + g.y*g.y);
                     g.x /= glen; g.y /= glen;
 
-                    racingLine.points[i].x = path.points[i].x + -g.y * displacement[i];
-                    racingLine.points[i].y = path.points[i].y + g.x * displacement[i];
+                    racingLine.points[i].pos.x = path.points[i].pos.x + -g.y * displacement[i];
+                    racingLine.points[i].pos.y = path.points[i].pos.y +  g.x * displacement[i];
                 }
             }
 
@@ -477,14 +474,16 @@ int main(int argc, char **argv)
             Spline_DrawSelf(&racingLine, 0, 0, YELLOW);
 
             for (int i = 0; i < arrlen(path.points); i++) {
-                Vector2 point = (Vector2){ path.points[i].x, path.points[i].y };
-                Vector2 p_screen = WorldToScreen(point);
+                Vector2 point_world = (Vector2){ path.points[i].pos.x, path.points[i].pos.y };
+                Vector2 p_screen = WorldToScreen(point_world);
                 DrawCircle(p_screen.x, p_screen.y, 5, RED);
             }
 
-            Point2D car_p = Spline_GetSplinePoint(&racingLine, marker);
-            Point2D car_g = Spline_GetSplineGradient(&racingLine, marker);
-            DrawWireFrameModel(modelCar, car_p.x, car_p.y, atan2f(car_g.y, car_g.x), 4.0f, WHITE);
+            Vector2 car_p_world = Spline_GetSplinePoint(&racingLine, marker);
+            Vector2 car_p_screen = WorldToScreen(car_p_world);
+            Vector2 car_g_world = Spline_GetSplineGradient(&racingLine, marker);
+//            Vector2 car_g_screen = WorldToScreen(car_g_world);
+            DrawWireFrameModel(modelCar, car_p_screen.x, car_p_screen.y, atan2f(car_g_world.y, car_g_world.x), 4.0f, WHITE);
 
             DrawFPS(20, 20);
         } EndDrawing();

@@ -7,12 +7,12 @@
 
 Point2D Point2D_ctor()
 {
-    return (Point2D){0, 0, 0};
+    return (Point2D){{0, 0}, 0};
 }
 
 Point2D Point2D_new(float x, float y, float len)
 {
-    return (Point2D){x, y, len};
+    return (Point2D){{x, y}, len};
 }
 
 Spline Spline_ctor()
@@ -25,7 +25,7 @@ Spline Spline_new(Point2D *points, float totalSplineLength, bool isLooped)
     return (Spline){points, totalSplineLength, isLooped};
 }
 
-Point2D Spline_GetSplinePoint(Spline *this, float t)
+Vector2 Spline_GetSplinePoint(Spline *this, float t)
 {
     int p0, p1, p2, p3;
     if (!this->isLooped) {
@@ -51,20 +51,20 @@ Point2D Spline_GetSplinePoint(Spline *this, float t)
     float q4 = ttt - tt;
 
     float tx = 0.5f *
-            (this->points[p0].x * q1 +
-             this->points[p1].x * q2 +
-             this->points[p2].x * q3 +
-             this->points[p3].x * q4);
+            (this->points[p0].pos.x * q1 +
+             this->points[p1].pos.x * q2 +
+             this->points[p2].pos.x * q3 +
+             this->points[p3].pos.x * q4);
     float ty = 0.5f *
-            (this->points[p0].y * q1 +
-             this->points[p1].y * q2 +
-             this->points[p2].y * q3 +
-             this->points[p3].y * q4);
+            (this->points[p0].pos.y * q1 +
+             this->points[p1].pos.y * q2 +
+             this->points[p2].pos.y * q3 +
+             this->points[p3].pos.y * q4);
 
-    return Point2D_new(tx, ty, 0.0f);
+    return (Vector2){ tx, ty };
 }
 
-Point2D Spline_GetSplineGradient(Spline *this, float t)
+Vector2 Spline_GetSplineGradient(Spline *this, float t)
 {
     int p0, p1, p2, p3;
     if (!this->isLooped) {
@@ -89,17 +89,17 @@ Point2D Spline_GetSplineGradient(Spline *this, float t)
     float q4 = 3.0f*tt - 2.0f*t;
 
     float tx = 0.5f *
-            (this->points[p0].x * q1 +
-             this->points[p1].x * q2 +
-             this->points[p2].x * q3 +
-             this->points[p3].x * q4);
+            (this->points[p0].pos.x * q1 +
+             this->points[p1].pos.x * q2 +
+             this->points[p2].pos.x * q3 +
+             this->points[p3].pos.x * q4);
     float ty = 0.5f *
-            (this->points[p0].y * q1 +
-             this->points[p1].y * q2 +
-             this->points[p2].y * q3 +
-             this->points[p3].y * q4);
+            (this->points[p0].pos.y * q1 +
+             this->points[p1].pos.y * q2 +
+             this->points[p2].pos.y * q3 +
+             this->points[p3].pos.y * q4);
 
-    return Point2D_new(tx, ty, 0.0f);
+    return (Vector2){ tx, ty };
 }
 
 float Spline_CalculateSegmentLength(Spline *this, int node)
@@ -107,13 +107,13 @@ float Spline_CalculateSegmentLength(Spline *this, int node)
     float length = 0.0f;
     float stepSize = 0.1;
 
-    Point2D old_point, new_point;
+    Vector2 old_point, new_point;
     old_point = Spline_GetSplinePoint(this, (float)node);
 
     for (float t = 0; t < 1.0f; t += stepSize) {
         new_point = Spline_GetSplinePoint(this, (float)node + t);
         length += sqrtf((new_point.x - old_point.x)*(new_point.x - old_point.x) +
-                         (new_point.y - old_point.y)*(new_point.y - old_point.y));
+                        (new_point.y - old_point.y)*(new_point.y - old_point.y));
         old_point = new_point;
     }
 
@@ -158,17 +158,17 @@ void Spline_DrawSelf(Spline *this, float ox, float oy, Color col)
 {
     if (this->isLooped) {
         for (float t = 0; t < (float)arrlen(this->points) - 0; t += 0.01f) {
-            Point2D pos = Spline_GetSplinePoint(this, t);
+            Vector2 pos = Spline_GetSplinePoint(this, t);
 
             Vector2 pixel_s;
-            pixel_s = WorldToScreen((Vector2){ pos.x, pos.y });
+            pixel_s = WorldToScreen(pos);
             DrawPixel(pixel_s.x, pixel_s.y, col);
 
             DrawPixel(pos.x, pos.y, col);
         }
     } else { // Not Looped
         for (float t = 0; t < (float)arrlen(this->points) - 3; t += 0.01f) {
-            Point2D pos = Spline_GetSplinePoint(this, t);
+            Vector2 pos = Spline_GetSplinePoint(this, t);
 
             // TODO: implement world to scale pert
 
