@@ -77,6 +77,8 @@ void DrawWireFrameModel(const Vector2 *vecModelCoordinates, float x, float y, fl
                 (Vector2){(int)vecTransformedCoordinates[j % verts].x , (int)vecTransformedCoordinates[j % verts].y},
                 5, col);
     }
+
+    arrfree(vecTransformedCoordinates);
 }
 
 bool buildTrack()
@@ -184,7 +186,7 @@ int main(int argc, char **argv)
         Vector2 mouse_scren = { (float)GetMouseX(), (float)GetMouseY()};
         Vector2 mouse_world = ScreenToWorld(mouse_scren);
 
-        if (IsKeyDown(KEY_SPACE)) {
+        if (!IsKeyDown(KEY_E)) {
             // For panning, we need to capture the screen location when the user starts
             // to pan...
             if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -206,6 +208,7 @@ int main(int argc, char **argv)
                 startPan = mouse_scren;
             }
         }
+
         // For zoom, we need to extract the location of the cursor before and after the
         // scale is changed. Here we get the cursor and translate into world space...
         Vector2 mouseWorld_BeforeZoom = {};
@@ -267,11 +270,15 @@ int main(int argc, char **argv)
             Spline_UpdateSplineProperties(&path);
         }
 
-
         // Move car around racing line
-        marker += 2.0f * GetFrameTime();
+        if (IsKeyDown(KEY_X)) 
+            marker += 1.0f * GetFrameTime();
+        if (IsKeyDown(KEY_Z)) 
+            marker -= 1.0f * GetFrameTime();
         if (marker >= (float)racingLine.totalSplineLength)
             marker -= (float)racingLine.totalSplineLength;
+        if (marker < 0)
+            marker = 0;
 
         // Calculate track boundary points
         float trackWidth = 10.0f;
@@ -392,18 +399,11 @@ int main(int argc, char **argv)
                 Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, t + res));
                 Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&trackRight, t + res));
 
-                DrawTriangleLines(
-                        (Vector2){pr1.x, pr1.y},
-                        (Vector2){pl1.x, pl1.y},
-                        (Vector2){pr2.x, pr2.y},
-                        GRAY);
-                DrawTriangleLines(
-                        (Vector2){pl1.x, pl1.y},
-                        (Vector2){pl2.x, pl2.y},
-                        (Vector2){pr2.x, pr2.y},
-                        GRAY);
+                DrawLineV(pr1, pr2, GRAY);
+                DrawLineV(pl1, pl2, GRAY);
+//                DrawTriangleLines((Vector2){pr1.x, pr1.y}, (Vector2){pl1.x, pl1.y}, (Vector2){pr2.x, pr2.y}, GRAY);
+//                DrawTriangleLines((Vector2){pl1.x, pl1.y}, (Vector2){pl2.x, pl2.y}, (Vector2){pr2.x, pr2.y}, GRAY);
 #endif
-
                 // Reset racing line
                 for (int i = 0; i < arrlen(racingLine.points); i++) {
                     racingLine.points[i] = path.points[i];
@@ -496,6 +496,12 @@ int main(int argc, char **argv)
     //--------------------------------------------------------------------------------------
 
     // Libera la memoria allocata
+
+    arrfree(modelCar);
+    arrfree(path.points);
+    arrfree(trackLeft.points);
+    arrfree(trackRight.points);
+    arrfree(racingLine.points);
 
     return 0;
 }

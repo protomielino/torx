@@ -157,7 +157,7 @@ void Spline_UpdateSplineProperties(Spline *this)
 void Spline_DrawSelf(Spline *this, float ox, float oy, Color col)
 {
     if (this->isLooped) {
-        for (float t = 0; t < (float)arrlen(this->points) - 0; t += 0.01f) {
+        for (float t = 0; t < (float)arrlen(this->points) - 0; t += 0.1f) {
             Vector2 pos = Spline_GetSplinePoint(this, t);
 
             Vector2 pixel_s;
