@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <float.h>
 
 #include <raylib.h>
 #include <raymath.h>
@@ -16,6 +17,10 @@
 
 #define WIDTH 1000
 #define HEIGHT 700
+
+#define X_DIRECTION ((Vector3){ 1.0f, 0.0f, 0.0f })
+#define Y_DIRECTION ((Vector3){ 0.0f, 1.0f, 0.0f })
+#define Z_DIRECTION ((Vector3){ 0.0f, 0.0f, 1.0f })
 
 Vector2 WINDOW_DIM = { WIDTH, HEIGHT };
 
@@ -75,7 +80,7 @@ void DrawWireFrameModel(const Vector2 *vecModelCoordinates, float x, float y, fl
         DrawLineEx(
                 (Vector2){(int)vecTransformedCoordinates[i % verts].x , (int)vecTransformedCoordinates[i % verts].y},
                 (Vector2){(int)vecTransformedCoordinates[j % verts].x , (int)vecTransformedCoordinates[j % verts].y},
-                5, col);
+                2, col);
     }
 
     arrfree(vecTransformedCoordinates);
@@ -143,6 +148,8 @@ int main(int argc, char **argv)
     // Initialization
     //---------------------------------------------------------------------------------------
 
+    bool go = false;
+
     //----------------------------------------------------------------------------------
     // pan-zoom
     //----------------------------------------------------------------------------------
@@ -167,6 +174,10 @@ int main(int argc, char **argv)
     modelCar = NULL;
 
     buildTrack();
+
+    Ray ray = { 0 }; // Picking ray
+    ray.position  = (Vector3){ 0.0f, 0.0f, 0.0f };
+    ray.direction = (Vector3){ 1.0f, 0.0f, 0.0f };
 
     InitWindow(WIDTH, HEIGHT, "Racing Line");
 
@@ -275,6 +286,13 @@ int main(int argc, char **argv)
             marker += 1.0f * GetFrameTime();
         if (IsKeyDown(KEY_Z)) 
             marker -= 1.0f * GetFrameTime();
+
+        if (IsKeyPressed(KEY_ONE)) {
+            go = !go;
+        }
+        if (go)
+            marker += 1.0f * GetFrameTime();
+
         if (marker >= (float)racingLine.totalSplineLength)
             marker -= (float)racingLine.totalSplineLength;
         if (marker < 0)
@@ -287,10 +305,10 @@ int main(int argc, char **argv)
             Vector2 g1 = Spline_GetSplineGradient(&path, i);
             float glen = sqrtf(g1.x*g1.x + g1.y*g1.y);
 
-            trackLeft.points[i].pos.x  = p1.x + trackWidth * ( -g1.y / glen );
-            trackLeft.points[i].pos.y  = p1.y + trackWidth * (  g1.x / glen );
-            trackRight.points[i].pos.x = p1.x - trackWidth * ( -g1.y / glen );
-            trackRight.points[i].pos.y = p1.y - trackWidth * (  g1.x / glen );
+            trackLeft.points[i].pos.x  = p1.x - trackWidth * ( -g1.y / glen );
+            trackLeft.points[i].pos.y  = p1.y - trackWidth * (  g1.x / glen );
+            trackRight.points[i].pos.x = p1.x + trackWidth * ( -g1.y / glen );
+            trackRight.points[i].pos.y = p1.y + trackWidth * (  g1.x / glen );
         }
 
         //----------------------------------------------------------------------------------
@@ -393,7 +411,7 @@ int main(int argc, char **argv)
             // Draw Track
             float res = 0.1f;
             for (float t = 0.0f; t < arrlen(path.points); t += res) {
-#if 1
+#if 0
                 Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, t));
                 Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&trackRight, t));
                 Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, t + res));
@@ -404,12 +422,54 @@ int main(int argc, char **argv)
 //                DrawTriangleLines((Vector2){pr1.x, pr1.y}, (Vector2){pl1.x, pl1.y}, (Vector2){pr2.x, pr2.y}, GRAY);
 //                DrawTriangleLines((Vector2){pl1.x, pl1.y}, (Vector2){pl2.x, pl2.y}, (Vector2){pr2.x, pr2.y}, GRAY);
 #endif
-                // Reset racing line
-                for (int i = 0; i < arrlen(racingLine.points); i++) {
-                    racingLine.points[i] = path.points[i];
-                    displacement[i] = 0;
+            }
+            // Reset racing line
+            for (int i = 0; i < arrlen(racingLine.points); i++) {
+                racingLine.points[i] = path.points[i];
+                displacement[i] = 0;
+            }
+            Spline_UpdateSplineProperties(&racingLine);
+
+            float start = marker;
+            float end = path.totalSplineLength;
+            float interval = res;
+            float range = end + start; // Estendiamo il range per coprire il ciclo
+
+            for (float t = start; t <= range; t += interval) {
+                float circular_t = fmodf(t, range);
+                if (circular_t > end) {
+                    circular_t = fmodf(circular_t, end);
                 }
-                Spline_UpdateSplineProperties(&racingLine);
+//                printf("%.1f\n", circular_t);
+                Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, circular_t));
+                Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&trackRight, circular_t));
+                Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, circular_t + res));
+                Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&trackRight, circular_t + res));
+
+                // ray checking
+
+                // quads
+                Vector3 gl0 = (Vector3){ pl1.x, pl1.y, -1.0f };
+                Vector3 gl1 = (Vector3){ pl1.x, pl1.y,  1.0f };
+                Vector3 gl2 = (Vector3){ pl2.x, pl2.y,  1.0f };
+                Vector3 gl3 = (Vector3){ pl2.x, pl2.y, -1.0f };
+                Vector3 gr0 = (Vector3){ pr1.x, pr1.y, -1.0f };
+                Vector3 gr1 = (Vector3){ pr1.x, pr1.y,  1.0f };
+                Vector3 gr2 = (Vector3){ pr2.x, pr2.y,  1.0f };
+                Vector3 gr3 = (Vector3){ pr2.x, pr2.y, -1.0f };
+
+                // Check ray collision against quad
+                RayCollision collisionLeft = GetRayCollisionQuad(ray, gl0, gl1, gl2, gl3);
+                RayCollision collisionRight = GetRayCollisionQuad(ray, gr0, gr1, gr2, gr3);
+
+                if (collisionLeft.hit) { // && (collisionLeft.distance < collisionRight.distance)) {
+                    DrawCircle(collisionLeft.point.x, collisionLeft.point.y, 5.0f, PURPLE);
+                    t = range;
+                }
+                if (collisionRight.hit) { //  && (collisionRight.distance < collisionLeft.distance)) {
+                    DrawCircle(collisionRight.point.x, collisionRight.point.y, 5.0f, GREEN);
+                    t = range;
+                }
             }
 
             for (int n = 0; n < iterations; n++) {
@@ -483,7 +543,18 @@ int main(int argc, char **argv)
             Vector2 car_p_screen = WorldToScreen(car_p_world);
             Vector2 car_g_world = Spline_GetSplineGradient(&racingLine, marker);
 //            Vector2 car_g_screen = WorldToScreen(car_g_world);
-            DrawWireFrameModel(modelCar, car_p_screen.x, car_p_screen.y, atan2f(car_g_world.y, car_g_world.x), 4.0f, WHITE);
+            DrawWireFrameModel(modelCar, car_p_screen.x, car_p_screen.y, atan2f(car_g_world.y, car_g_world.x), 2.0f*scale.x, WHITE);
+
+            ray.position.x  = car_p_screen.x;
+            ray.position.y  = car_p_screen.y;
+            ray.direction.x = car_g_world.x;
+            ray.direction.y = car_g_world.y;
+            DrawLine(
+                    ray.position.x,
+                    ray.position.y,
+                    ray.position.x + ray.direction.x * scale.x,
+                    ray.position.y + ray.direction.y * scale.y,
+                    YELLOW);
 
             DrawFPS(20, 20);
         } EndDrawing();
