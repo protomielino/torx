@@ -7,13 +7,16 @@
 #include <float.h>
 
 #include <raylib.h>
+#define RAYMATH_IMPLEMENTATION
 #include <raymath.h>
 
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
 
-#include "spline.h"
 #include "maths.h"
+#include "spline.h"
+#include "track.h"
+#include "car.h"
 
 #define WIDTH 1000
 #define HEIGHT 700
@@ -34,114 +37,6 @@ Vector2 startPan = { 0.0f, 0.0f };
 
 Vector2 selectedCell = { 0.0f, 0.0f };
 
-// track-lines variables
-Spline path, trackLeft, trackRight, racingLine;    // Various splines
-int nodes;    // Number of nodes in spline
-float displacement[20] = {0}; // Displacement along spline node normal
-int iterations;
-float marker;
-int selectedNode;
-Vector2 *modelCar;
-
-void DrawWireFrameModel(const Vector2 *vecModelCoordinates, float x, float y, float r, float s, Color col)
-{
-    // pair.x  = x coordinate
-    // pair.y = y coordinate
-
-    // Create translated model vector of coordinate pairs
-    Vector2 *vecTransformedCoordinates = NULL;
-    int verts = arrlen(vecModelCoordinates);
-    arrsetlen(vecTransformedCoordinates, verts);
-
-    // Rotate
-    for (int i = 0; i < verts; i++) {
-        vecTransformedCoordinates[i].x = vecModelCoordinates[i].x * cosf(r) - vecModelCoordinates[i].y * sinf(r);
-        vecTransformedCoordinates[i].y = vecModelCoordinates[i].x  * sinf(r) + vecModelCoordinates[i].y * cosf(r);
-    }
-
-    // Scale
-    for (int i = 0; i < verts; i++)
-    {
-        vecTransformedCoordinates[i].x  = vecTransformedCoordinates[i].x  * s;
-        vecTransformedCoordinates[i].y = vecTransformedCoordinates[i].y * s;
-    }
-
-    // Translate
-    for (int i = 0; i < verts; i++)
-    {
-        vecTransformedCoordinates[i].x  = vecTransformedCoordinates[i].x  + x;
-        vecTransformedCoordinates[i].y = vecTransformedCoordinates[i].y + y;
-    }
-
-    // Draw Closed Polygon
-    for (int i = 0; i < verts + 1; i++)
-    {
-        int j = (i + 1);
-        DrawLineEx(
-                (Vector2){(int)vecTransformedCoordinates[i % verts].x , (int)vecTransformedCoordinates[i % verts].y},
-                (Vector2){(int)vecTransformedCoordinates[j % verts].x , (int)vecTransformedCoordinates[j % verts].y},
-                2, col);
-    }
-
-    arrfree(vecTransformedCoordinates);
-}
-
-bool buildTrack()
-{
-    for (int i = 0; i < nodes; i++)
-    {
-        //path.points.push_back(
-        //  { 30.0f * sinf((float)i / (float)nodes * 3.14159f * 2.0f) + ScreenWidth() / 2,
-        //  30.0f * cosf((float)i / (float)nodes * 3.14159f * 2.0f) + ScreenHeight() / 2 });
-
-        // Could use allocation functions for thes now, but just size via
-        // append
-        arrput(trackLeft.points, Point2D_ctor());
-        arrput(trackRight.points, Point2D_ctor());
-        arrput(racingLine.points, Point2D_ctor());
-    }
-
-    // A hand crafted track
-    arrput(path.points, Point2D_new(  81.8f, 196.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 108.0f, 210.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 152.0f, 216.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 182.0f, 185.6f, 0.0f ));
-    arrput(path.points, Point2D_new( 190.0f, 159.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 198.0f, 122.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 226.0f,  93.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 224.0f,  41.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 204.0f,  15.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 158.0f,  24.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 146.0f,  52.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 157.0f,  93.0f, 0.0f ));
-    arrput(path.points, Point2D_new( 124.0f, 129.0f, 0.0f ));
-    arrput(path.points, Point2D_new(  83.0f, 104.0f, 0.0f ));
-    arrput(path.points, Point2D_new(  77.0f,  62.0f, 0.0f ));
-    arrput(path.points, Point2D_new(  40.0f,  57.0f, 0.0f ));
-    arrput(path.points, Point2D_new(  21.0f,  83.0f, 0.0f ));
-    arrput(path.points, Point2D_new(  33.0f, 145.0f, 0.0f ));
-    arrput(path.points, Point2D_new(  30.0f, 198.0f, 0.0f ));
-    arrput(path.points, Point2D_new(  48.0f, 210.0f, 0.0f ));
-
-//    for (int i = 0; i < arrlen(path.points); i++) {
-//        path.points[i].pos.x = (path.points[i].pos.x -WIDTH/2) * 4.0f;
-//        path.points[i].pos.y = (path.points[i].pos.y -HEIGHT/2) * 3.0f;;
-//    }
-
-
-    arrput(modelCar, ((Vector2){ 2,  0 }));
-    arrput(modelCar, ((Vector2){ 0, -1 }));
-    arrput(modelCar, ((Vector2){ 0,  1 }));
-
-    for (int i = 0; i < arrlen(modelCar); i++) {
-        modelCar[i].x *= 4;
-        modelCar[i].y *= 3;
-    }
-
-    Spline_UpdateSplineProperties(&path);
-
-    return true;
-}
 
 int main(int argc, char **argv)
 {
@@ -160,24 +55,11 @@ int main(int argc, char **argv)
     //----------------------------------------------------------------------------------
     // track-lines
     //----------------------------------------------------------------------------------
-    path = Spline_ctor();
-    trackLeft = Spline_ctor();
-    trackRight = Spline_ctor();
-    racingLine = Spline_ctor();;    // Various splines
+    track track = track_ctor();
+    track_build(&track);
 
-    nodes = 20;    // Number of nodes in spline
-
-    iterations = 1;
-    marker = 1.0f;
-    selectedNode = -1;
-
-    modelCar = NULL;
-
-    buildTrack();
-
-    Ray ray = { 0 }; // Picking ray
-    ray.position  = (Vector3){ 0.0f, 0.0f, 0.0f };
-    ray.direction = (Vector3){ 1.0f, 0.0f, 0.0f };
+    car car = car_ctor();
+    car_build(&car);
 
     InitWindow(WIDTH, HEIGHT, "Racing Line");
 
@@ -253,62 +135,62 @@ int main(int argc, char **argv)
 
         // Handle iteration count
         if (IsKeyDown(KEY_A)) {
-            iterations++;
+            track.iterations++;
         } else if (IsKeyDown(KEY_S)) {
-            iterations--;
+            track.iterations--;
         }
-        if (iterations < 0)
-            iterations = 0;
+        if (track.iterations < 0)
+            track.iterations = 0;
 
         // Check if node is selected with mouse
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-            for (int i = 0; i < arrlen(path.points); i++) {
-                float d = sqrtf(powf(path.points[i].pos.x - mouse_world.x, 2) + powf(path.points[i].pos.y - mouse_world.y, 2));
+            for (int i = 0; i < arrlen(track.path.points); i++) {
+                float d = sqrtf(powf(track.path.points[i].pos.x - mouse_world.x, 2) + powf(track.path.points[i].pos.y - mouse_world.y, 2));
                 if (d < 10.0f) {
-                    selectedNode = i;
+                    track.selectedNode = i;
                     break;
                 }
             }
         }
 
         if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON))
-            selectedNode = -1;
+            track.selectedNode = -1;
 
         // Move selected node
-        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && selectedNode >= 0) {
-            path.points[selectedNode].pos.x = mouse_world.x;
-            path.points[selectedNode].pos.y = mouse_world.y;
-            Spline_UpdateSplineProperties(&path);
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON) && track.selectedNode >= 0) {
+            track.path.points[track.selectedNode].pos.x = mouse_world.x;
+            track.path.points[track.selectedNode].pos.y = mouse_world.y;
+//            Spline_UpdateSplineProperties(&track.path);
         }
 
         // Move car around racing line
         if (IsKeyDown(KEY_X)) 
-            marker += 1.0f * GetFrameTime();
+            track.marker += 1.0f * GetFrameTime();
         if (IsKeyDown(KEY_Z)) 
-            marker -= 1.0f * GetFrameTime();
+            track.marker -= 1.0f * GetFrameTime();
 
         if (IsKeyPressed(KEY_ONE)) {
             go = !go;
         }
         if (go)
-            marker += 1.0f * GetFrameTime();
+            track.marker += 1.0f * GetFrameTime();
 
-        if (marker >= (float)racingLine.totalSplineLength)
-            marker -= (float)racingLine.totalSplineLength;
-        if (marker < 0)
-            marker = 0;
+        if (track.marker >= (float)track.racingLine.totalSplineLength)
+            track.marker -= (float)track.racingLine.totalSplineLength;
+        if (track.marker < 0)
+            track.marker = 0;
 
         // Calculate track boundary points
         float trackWidth = 10.0f;
-        for (int i = 0; i < arrlen(path.points); i++) {
-            Vector2 p1 = Spline_GetSplinePoint(&path, i);
-            Vector2 g1 = Spline_GetSplineGradient(&path, i);
+        for (int i = 0; i < arrlen(track.path.points); i++) {
+            Vector2 p1 = Spline_GetSplinePoint(&track.path, i);
+            Vector2 g1 = Spline_GetSplineGradient(&track.path, i);
             float glen = sqrtf(g1.x*g1.x + g1.y*g1.y);
 
-            trackLeft.points[i].pos.x  = p1.x - trackWidth * ( -g1.y / glen );
-            trackLeft.points[i].pos.y  = p1.y - trackWidth * (  g1.x / glen );
-            trackRight.points[i].pos.x = p1.x + trackWidth * ( -g1.y / glen );
-            trackRight.points[i].pos.y = p1.y + trackWidth * (  g1.x / glen );
+            track.trackLeft.points[i].pos.x  = p1.x - trackWidth * ( -g1.y / glen );
+            track.trackLeft.points[i].pos.y  = p1.y - trackWidth * (  g1.x / glen );
+            track.trackRight.points[i].pos.x = p1.x + trackWidth * ( -g1.y / glen );
+            track.trackRight.points[i].pos.y = p1.y + trackWidth * (  g1.x / glen );
         }
 
         //----------------------------------------------------------------------------------
@@ -319,98 +201,12 @@ int main(int argc, char **argv)
             ClearBackground(BLACK);
 
             //----------------------------------------------------------------------------------
-            // pan-zoom
-            //----------------------------------------------------------------------------------
-
-            // Clip
-
-            Vector2 worldNW = ScreenToWorld((Vector2){0,0});
-            float worldLeft = worldNW.x;
-            float worldTop = worldNW.y;
-            Vector2 worldSE = ScreenToWorld(WINDOW_DIM);
-            float worldRight = worldSE.x;
-            float worldBottom = worldSE.y;
-
-
-            // Draw Main Axes a 10x10 Unit Grid
-            // Draw 10 horizontal lines
-            int linesDrawn = 0;
-            for (float y = 0.0f; y <= 10.0f; y++) {
-                if (y >= worldTop && y <= worldBottom) {
-                    Vector2 s = { 0.0f, y };
-                    Vector2 e = { 10.0f, y };
-
-                    Vector2 pixel_s = {};
-                    Vector2 pixel_e = {};
-
-                    pixel_s = WorldToScreen(s);
-                    pixel_e = WorldToScreen(e);
-
-                    DrawLine(pixel_s.x, pixel_s.y, pixel_e.x, pixel_e.y, WHITE);
-                    linesDrawn++;
-                }
-            }
-
-            // Draw 10 vertical lines
-            for (float x = 0.0f; x <= 10.0f; x++) {
-                if (x >= worldLeft && x <= worldRight) {
-                    Vector2 s = { x, 0.0f };
-                    Vector2 e = { x, 10.0f };
-
-                    Vector2 pixel_s = {};
-                    Vector2 pixel_e = {};
-
-                    pixel_s = WorldToScreen(s);
-                    pixel_e = WorldToScreen(e);
-
-                    DrawLine(pixel_s.x, pixel_s.y, pixel_e.x, pixel_e.y, WHITE);
-                    linesDrawn++;
-                }
-            }
-
-            // Draw selected cell
-
-            // We can easily determine where the mouse is in world space. In fact we already
-            // have this frame so just reuse the values
-            if (IsMouseButtonReleased(MOUSE_MIDDLE_BUTTON)) {
-                selectedCell = (Vector2){(int)mouseWorld_AfterZoom.x, (int)mouseWorld_AfterZoom.y};
-            }
-
-            // Draw selected cell by filling with red circle. Convert cell coords
-            // into screen space, also scale the radius
-            Vector2 c;
-            int cr;
-            c = WorldToScreen(Vector2AddValue(selectedCell, 0.5f));
-            cr = 0.3f * scale.x;
-            DrawCircle(c.x, c.y, cr, RED);
-            DrawText(TextFormat("Lines Drawn: %d", linesDrawn), 2, 2, 10, WHITE);       // Draw text (using default font)
-
-
-            // Draw Chart
-            float worldPerScreenWidthPixel = (worldRight - worldLeft) / WIDTH;
-            //float worldPerScreenHeightPixel = (worldBottom - worldTop) / HEIGHT;
-            Vector2 p;
-            Vector2 op = {};
-            op = WorldToScreen(
-                        (Vector2){
-                            worldLeft - worldPerScreenWidthPixel,
-                            -function((worldLeft - worldPerScreenWidthPixel) - 5.0f) + 5.0f
-                        });
-            for (float x = worldLeft; x < worldRight; x+=worldPerScreenWidthPixel) {
-                float y = -function(x - 5.0f) + 5.0f;
-                p = WorldToScreen((Vector2){ x, y });
-                DrawLine(op.x, op.y, p.x, p.y, GREEN);
-                op = p;
-            }
-
-
-            //----------------------------------------------------------------------------------
             // track-lines
             //----------------------------------------------------------------------------------
 
             // Draw Track
             float res = 0.1f;
-            for (float t = 0.0f; t < arrlen(path.points); t += res) {
+            for (float t = 0.0f; t < arrlen(track.path.points); t += res) {
 #if 0
                 Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, t));
                 Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&trackRight, t));
@@ -424,60 +220,23 @@ int main(int argc, char **argv)
 #endif
             }
             // Reset racing line
-            for (int i = 0; i < arrlen(racingLine.points); i++) {
-                racingLine.points[i] = path.points[i];
-                displacement[i] = 0;
+            for (int i = 0; i < arrlen(track.racingLine.points); i++) {
+                track.racingLine.points[i] = track.path.points[i];
+                track.displacement[i] = 0;
             }
-            Spline_UpdateSplineProperties(&racingLine);
+            Spline_UpdateSplineProperties(&track.racingLine);
 
-            float start = marker;
-            float end = path.totalSplineLength;
+            float start = track.marker;
+            float end = track.path.totalSplineLength;
             float interval = res;
             float range = end + start; // Estendiamo il range per coprire il ciclo
 
-            for (float t = start; t <= range; t += interval) {
-                float circular_t = fmodf(t, range);
-                if (circular_t > end) {
-                    circular_t = fmodf(circular_t, end);
-                }
-//                printf("%.1f\n", circular_t);
-                Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, circular_t));
-                Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&trackRight, circular_t));
-                Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, circular_t + res));
-                Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&trackRight, circular_t + res));
-
-                // ray checking
-
-                // quads
-                Vector3 gl0 = (Vector3){ pl1.x, pl1.y, -1.0f };
-                Vector3 gl1 = (Vector3){ pl1.x, pl1.y,  1.0f };
-                Vector3 gl2 = (Vector3){ pl2.x, pl2.y,  1.0f };
-                Vector3 gl3 = (Vector3){ pl2.x, pl2.y, -1.0f };
-                Vector3 gr0 = (Vector3){ pr1.x, pr1.y, -1.0f };
-                Vector3 gr1 = (Vector3){ pr1.x, pr1.y,  1.0f };
-                Vector3 gr2 = (Vector3){ pr2.x, pr2.y,  1.0f };
-                Vector3 gr3 = (Vector3){ pr2.x, pr2.y, -1.0f };
-
-                // Check ray collision against quad
-                RayCollision collisionLeft = GetRayCollisionQuad(ray, gl0, gl1, gl2, gl3);
-                RayCollision collisionRight = GetRayCollisionQuad(ray, gr0, gr1, gr2, gr3);
-
-                if (collisionLeft.hit) { // && (collisionLeft.distance < collisionRight.distance)) {
-                    DrawCircle(collisionLeft.point.x, collisionLeft.point.y, 5.0f, PURPLE);
-                    t = range;
-                }
-                if (collisionRight.hit) { //  && (collisionRight.distance < collisionLeft.distance)) {
-                    DrawCircle(collisionRight.point.x, collisionRight.point.y, 5.0f, GREEN);
-                    t = range;
-                }
-            }
-
-            for (int n = 0; n < iterations; n++) {
-                for (int i = 0; i < arrlen(racingLine.points); i++) {
+            for (int n = 0; n < track.iterations; n++) {
+                for (int i = 0; i < arrlen(track.racingLine.points); i++) {
                     // Get locations of neighbour nodes
-                    Point2D pointRight = racingLine.points[(i + 1) % arrlen(racingLine.points)];
-                    Point2D pointLeft = racingLine.points[(i + arrlen(racingLine.points) - 1) % arrlen(racingLine.points)];
-                    Point2D pointMiddle = racingLine.points[i];
+                    Point2D pointRight = track.racingLine.points[(i + 1) % arrlen(track.racingLine.points)];
+                    Point2D pointLeft = track.racingLine.points[(i + arrlen(track.racingLine.points) - 1) % arrlen(track.racingLine.points)];
+                    Point2D pointMiddle = track.racingLine.points[i];
 
                     // Create vectors to neighbours
                     Vector2 vectorLeft  = { pointLeft.pos.x - pointMiddle.pos.x, pointLeft.pos.y - pointMiddle.pos.y };
@@ -495,7 +254,7 @@ int main(int argc, char **argv)
                     vectorSum = Vector2Scale(vectorSum, 1/len);
 
                     // Get point gradient and normalise
-                    Vector2 g = Spline_GetSplineGradient(&path, i);
+                    Vector2 g = Spline_GetSplineGradient(&track.path, i);
                     float glen = sqrtf(g.x*g.x + g.y*g.y);
                     g.x /= glen; g.y /= glen;
 
@@ -503,58 +262,104 @@ int main(int argc, char **argv)
                     float dp = -g.y*vectorSum.x + g.x * vectorSum.y;
 
                     // Shortest path
-                    displacement[i] += (dp * 0.3f);
+                    track.displacement[i] += (dp * 0.3f);
 
                     // Curvature
                     //displacement[(i + 1) % arrlen(racingLine.points)] += dp * -0.2f;
-                    displacement[(i - 1 + arrlen(racingLine.points)) % arrlen(racingLine.points)] += dp * -0.2f;
+                    track.displacement[(i - 1 + arrlen(track.racingLine.points)) % arrlen(track.racingLine.points)] += dp * -0.2f;
                 }
 
                 // Clamp displaced points to track width
-                for (int i = 0; i < arrlen(racingLine.points); i++) {
-                    if (displacement[i] >=  trackWidth)
-                        displacement[i] =  trackWidth;
-                    if (displacement[i] <= -trackWidth)
-                        displacement[i] = -trackWidth;
+                for (int i = 0; i < arrlen(track.racingLine.points); i++) {
+                    if (track.displacement[i] >=  trackWidth)
+                        track.displacement[i] =   trackWidth;
+                    if (track.displacement[i] <= -trackWidth)
+                        track.displacement[i] =  -trackWidth;
 
-                    Vector2 g = Spline_GetSplineGradient(&path, i);
+                    Vector2 g = Spline_GetSplineGradient(&track.path, i);
                     float glen = sqrtf(g.x*g.x + g.y*g.y);
                     g.x /= glen; g.y /= glen;
 
-                    racingLine.points[i].pos.x = path.points[i].pos.x + -g.y * displacement[i];
-                    racingLine.points[i].pos.y = path.points[i].pos.y +  g.x * displacement[i];
+                    track.racingLine.points[i].pos.x = track.path.points[i].pos.x + -g.y * track.displacement[i];
+                    track.racingLine.points[i].pos.y = track.path.points[i].pos.y +  g.x * track.displacement[i];
                 }
             }
 
-            Spline_DrawSelf(&path, 0, 0, WHITE);
-            Spline_DrawSelf(&trackLeft, 0, 0, RED);
-            Spline_DrawSelf(&trackRight, 0, 0, GREEN);
+            Spline_DrawSelf(&track.path, 0, 0, WHITE);
+            Spline_DrawSelf(&track.trackLeft, 0, 0, RED);
+            Spline_DrawSelf(&track.trackRight, 0, 0, GREEN);
 
-            Spline_UpdateSplineProperties(&racingLine);
-            Spline_DrawSelf(&racingLine, 0, 0, YELLOW);
+//            Spline_UpdateSplineProperties(&track.racingLine);
+            Spline_DrawSelf(&track.racingLine, 0, 0, YELLOW);
 
-            for (int i = 0; i < arrlen(path.points); i++) {
-                Vector2 point_world = (Vector2){ path.points[i].pos.x, path.points[i].pos.y };
+            for (int i = 0; i < arrlen(track.path.points); i++) {
+                Vector2 point_world = (Vector2){ track.path.points[i].pos.x, track.path.points[i].pos.y };
                 Vector2 p_screen = WorldToScreen(point_world);
                 DrawCircle(p_screen.x, p_screen.y, 5, RED);
             }
 
-            Vector2 car_p_world = Spline_GetSplinePoint(&racingLine, marker);
-            Vector2 car_p_screen = WorldToScreen(car_p_world);
-            Vector2 car_g_world = Spline_GetSplineGradient(&racingLine, marker);
-//            Vector2 car_g_screen = WorldToScreen(car_g_world);
-            DrawWireFrameModel(modelCar, car_p_screen.x, car_p_screen.y, atan2f(car_g_world.y, car_g_world.x), 2.0f*scale.x, WHITE);
 
-            ray.position.x  = car_p_screen.x;
-            ray.position.y  = car_p_screen.y;
-            ray.direction.x = car_g_world.x;
-            ray.direction.y = car_g_world.y;
-            DrawLine(
-                    ray.position.x,
-                    ray.position.y,
-                    ray.position.x + ray.direction.x * scale.x,
-                    ray.position.y + ray.direction.y * scale.y,
-                    YELLOW);
+            RayCollision collision = {0};
+
+            for (float t = start; t <= range; t += interval) {
+                float circular_t = fmodf(t, range);
+                if (circular_t > end) {
+                    circular_t = fmodf(circular_t, end);
+                }
+//                printf("%.1f\n", circular_t);
+                Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, circular_t));
+                Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, circular_t));
+                Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, circular_t + res));
+                Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, circular_t + res));
+
+                // ray checking
+
+                // quads
+                Vector3 gl0 = (Vector3){ pl1.x, pl1.y, -1.0f };
+                Vector3 gl1 = (Vector3){ pl1.x, pl1.y,  1.0f };
+                Vector3 gl2 = (Vector3){ pl2.x, pl2.y,  1.0f };
+                Vector3 gl3 = (Vector3){ pl2.x, pl2.y, -1.0f };
+                Vector3 gr0 = (Vector3){ pr1.x, pr1.y, -1.0f };
+                Vector3 gr1 = (Vector3){ pr1.x, pr1.y,  1.0f };
+                Vector3 gr2 = (Vector3){ pr2.x, pr2.y,  1.0f };
+                Vector3 gr3 = (Vector3){ pr2.x, pr2.y, -1.0f };
+
+                // Check ray collision against quad
+                RayCollision collisionLeft = GetRayCollisionQuad(car.ray[0], gl0, gl1, gl2, gl3);
+                RayCollision collisionRight = GetRayCollisionQuad(car.ray[0], gr0, gr1, gr2, gr3);
+
+                if (collisionLeft.hit) { // && (collisionLeft.distance < collisionRight.distance)) {
+                    DrawCircle(collisionLeft.point.x, collisionLeft.point.y, 5.0f, PURPLE);
+                    collision = collisionLeft;
+                    t = range; // escape for loop
+                }
+                if (collisionRight.hit) { //  && (collisionRight.distance < collisionLeft.distance)) {
+                    DrawCircle(collisionRight.point.x, collisionRight.point.y, 5.0f, GREEN);
+                    collision = collisionRight;
+                    t = range; // escape for loop
+                }
+            }
+
+
+            car.p_world = Spline_GetSplinePoint(&track.racingLine, track.marker);
+            car.p_screen = WorldToScreen(car.p_world);
+            car.g_world = Spline_GetSplineGradient(&track.racingLine, track.marker);
+            car.g_screen = WorldToScreen(car.g_world);
+            car_DrawWireFrameModel(&car, car.p_screen, atan2f(car.g_world.y, car.g_world.x), scale.x, WHITE);
+
+            for (int r = 0; r < car.n_rays; r++) {
+                car.ray[r].position = (Vector3){ car.p_screen.x, car.p_screen.y, 0.0f };
+                car.ray[r].direction = (Vector3){ car.g_world.x, car.g_world.y, 0.0f };
+                car.ray[r].direction = Vector3Normalize(car.ray[r].direction);
+                DrawLine(
+                        car.ray[r].position.x,
+                        car.ray[r].position.y,
+                        collision.point.x,
+                        collision.point.y,
+//                      ray.position.x + ray.direction.x * scale.x * 50,
+//                      ray.position.y + ray.direction.y * scale.y * 50,
+                        YELLOW);
+            }
 
             DrawFPS(20, 20);
         } EndDrawing();
@@ -568,11 +373,11 @@ int main(int argc, char **argv)
 
     // Libera la memoria allocata
 
-    arrfree(modelCar);
-    arrfree(path.points);
-    arrfree(trackLeft.points);
-    arrfree(trackRight.points);
-    arrfree(racingLine.points);
+    arrfree(car.modelCar);
+    arrfree(track.path.points);
+    arrfree(track.trackLeft.points);
+    arrfree(track.trackRight.points);
+    arrfree(track.racingLine.points);
 
     return 0;
 }
