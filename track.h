@@ -20,7 +20,7 @@ typedef struct
     int selectedNode;
 } track;
 
-track track_ctor();
+track track_ctor(int n_nodes);
 bool track_build(track *this);
 
 #endif /* TRACK_H_ */

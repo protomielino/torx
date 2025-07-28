@@ -1,5 +1,8 @@
 #include <math.h>
 
+#include <raylib.h>
+#include <raymath.h>
+
 #include "car.h"
 
 #include "stb_ds.h"
@@ -11,7 +14,7 @@ car car_ctor()
     return this;
 }
 
-void car_build(car *this)
+void car_build(car *this, int n_rays)
 {
     arrput(this->modelCar, ((Vector2){  1,  0 }));
     arrput(this->modelCar, ((Vector2){ -1, -1 }));
@@ -22,12 +25,21 @@ void car_build(car *this)
         this->modelCar[i].y *= 3;
     }
 
-    this->n_rays = 5;
+    float angle = -M_PI_4;
+    this->n_rays = n_rays;
     for (int i = 0; i < this->n_rays; i++) {
         Ray ray = {0};
+
         ray.position  = (Vector3){ 0.0f, 0.0f, 0.0f };
         ray.direction = (Vector3){ 1.0f, 0.0f, 0.0f };
+        ray.direction = Vector3RotateByAxisAngle(
+                (Vector3){ 1.0f, 0.0f, 0.0f },
+                (Vector3){ 0.0f, 0.0f, 1.0f },
+                angle);
+
         arrput(this->ray, ray);
+
+        angle += M_PI_2 / this->n_rays;
     }
 }
 

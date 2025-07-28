@@ -55,11 +55,11 @@ int main(int argc, char **argv)
     //----------------------------------------------------------------------------------
     // track-lines
     //----------------------------------------------------------------------------------
-    track track = track_ctor();
+    track track = track_ctor(20);
     track_build(&track);
 
     car car = car_ctor();
-    car_build(&car);
+    car_build(&car, 5);
 
     InitWindow(WIDTH, HEIGHT, "Racing Line");
 
@@ -207,16 +207,16 @@ int main(int argc, char **argv)
             // Draw Track
             float res = 0.1f;
             for (float t = 0.0f; t < arrlen(track.path.points); t += res) {
-#if 0
-                Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, t));
-                Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&trackRight, t));
-                Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&trackLeft, t + res));
-                Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&trackRight, t + res));
+#if 1
+                Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, t));
+                Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, t));
+                Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, t + res));
+                Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, t + res));
 
-                DrawLineV(pr1, pr2, GRAY);
-                DrawLineV(pl1, pl2, GRAY);
-//                DrawTriangleLines((Vector2){pr1.x, pr1.y}, (Vector2){pl1.x, pl1.y}, (Vector2){pr2.x, pr2.y}, GRAY);
-//                DrawTriangleLines((Vector2){pl1.x, pl1.y}, (Vector2){pl2.x, pl2.y}, (Vector2){pr2.x, pr2.y}, GRAY);
+//                DrawLineV(pr1, pr2, GRAY);
+//                DrawLineV(pl1, pl2, GRAY);
+                DrawTriangleLines((Vector2){pr1.x, pr1.y}, (Vector2){pl1.x, pl1.y}, (Vector2){pr2.x, pr2.y}, GRAY);
+                DrawTriangleLines((Vector2){pl1.x, pl1.y}, (Vector2){pl2.x, pl2.y}, (Vector2){pr2.x, pr2.y}, GRAY);
 #endif
             }
             // Reset racing line
@@ -225,11 +225,6 @@ int main(int argc, char **argv)
                 track.displacement[i] = 0;
             }
             Spline_UpdateSplineProperties(&track.racingLine);
-
-            float start = track.marker;
-            float end = track.path.totalSplineLength;
-            float interval = res;
-            float range = end + start; // Estendiamo il range per coprire il ciclo
 
             for (int n = 0; n < track.iterations; n++) {
                 for (int i = 0; i < arrlen(track.racingLine.points); i++) {
@@ -299,67 +294,84 @@ int main(int argc, char **argv)
             }
 
 
-            RayCollision collision = {0};
-
-            for (float t = start; t <= range; t += interval) {
-                float circular_t = fmodf(t, range);
-                if (circular_t > end) {
-                    circular_t = fmodf(circular_t, end);
-                }
-//                printf("%.1f\n", circular_t);
-                Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, circular_t));
-                Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, circular_t));
-                Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, circular_t + res));
-                Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, circular_t + res));
-
-                // ray checking
-
-                // quads
-                Vector3 gl0 = (Vector3){ pl1.x, pl1.y, -1.0f };
-                Vector3 gl1 = (Vector3){ pl1.x, pl1.y,  1.0f };
-                Vector3 gl2 = (Vector3){ pl2.x, pl2.y,  1.0f };
-                Vector3 gl3 = (Vector3){ pl2.x, pl2.y, -1.0f };
-                Vector3 gr0 = (Vector3){ pr1.x, pr1.y, -1.0f };
-                Vector3 gr1 = (Vector3){ pr1.x, pr1.y,  1.0f };
-                Vector3 gr2 = (Vector3){ pr2.x, pr2.y,  1.0f };
-                Vector3 gr3 = (Vector3){ pr2.x, pr2.y, -1.0f };
-
-                // Check ray collision against quad
-                RayCollision collisionLeft = GetRayCollisionQuad(car.ray[0], gl0, gl1, gl2, gl3);
-                RayCollision collisionRight = GetRayCollisionQuad(car.ray[0], gr0, gr1, gr2, gr3);
-
-                if (collisionLeft.hit) { // && (collisionLeft.distance < collisionRight.distance)) {
-                    DrawCircle(collisionLeft.point.x, collisionLeft.point.y, 5.0f, PURPLE);
-                    collision = collisionLeft;
-                    t = range; // escape for loop
-                }
-                if (collisionRight.hit) { //  && (collisionRight.distance < collisionLeft.distance)) {
-                    DrawCircle(collisionRight.point.x, collisionRight.point.y, 5.0f, GREEN);
-                    collision = collisionRight;
-                    t = range; // escape for loop
-                }
-            }
-
-
             car.p_world = Spline_GetSplinePoint(&track.racingLine, track.marker);
             car.p_screen = WorldToScreen(car.p_world);
             car.g_world = Spline_GetSplineGradient(&track.racingLine, track.marker);
             car.g_screen = WorldToScreen(car.g_world);
             car_DrawWireFrameModel(&car, car.p_screen, atan2f(car.g_world.y, car.g_world.x), scale.x, WHITE);
 
-            for (int r = 0; r < car.n_rays; r++) {
+            float a = -M_PI_4;
+            for (int r = 0; r < arrlen(car.ray); r++) {
                 car.ray[r].position = (Vector3){ car.p_screen.x, car.p_screen.y, 0.0f };
-                car.ray[r].direction = (Vector3){ car.g_world.x, car.g_world.y, 0.0f };
+                car.ray[r].direction = Vector3RotateByAxisAngle(
+                        (Vector3){ car.g_world.x, car.g_world.y, 0.0f },
+                        (Vector3){ 0.0f, 0.0f, 1.0f },
+                        a);
                 car.ray[r].direction = Vector3Normalize(car.ray[r].direction);
-                DrawLine(
-                        car.ray[r].position.x,
-                        car.ray[r].position.y,
-                        collision.point.x,
-                        collision.point.y,
-//                      ray.position.x + ray.direction.x * scale.x * 50,
-//                      ray.position.y + ray.direction.y * scale.y * 50,
-                        YELLOW);
+
+                a += (M_PI_2 / (float)(arrlen(car.ray)-1));
             }
+
+            RayCollision *collision = NULL;
+
+            for (int r = 0; r < car.n_rays; r++) {
+                float start = track.marker;
+                float end = track.path.totalSplineLength;
+                float interval = res;
+                float range = end + start; // Estendiamo il range per coprire il ciclo
+
+                for (float t = start; t <= range; t += interval) {
+                    float circular_t = fmodf(t, range);
+                    if (circular_t > end) {
+                        circular_t = fmodf(circular_t, end);
+                    }
+                    //                printf("%.1f\n", circular_t);
+                    Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, circular_t));
+                    Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, circular_t));
+                    Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, circular_t + res));
+                    Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, circular_t + res));
+
+                    // ray checking
+
+                    // quads
+                    Vector3 gl0 = (Vector3){ pl1.x, pl1.y, -1.0f };
+                    Vector3 gl1 = (Vector3){ pl1.x, pl1.y,  1.0f };
+                    Vector3 gl2 = (Vector3){ pl2.x, pl2.y,  1.0f };
+                    Vector3 gl3 = (Vector3){ pl2.x, pl2.y, -1.0f };
+                    Vector3 gr0 = (Vector3){ pr1.x, pr1.y, -1.0f };
+                    Vector3 gr1 = (Vector3){ pr1.x, pr1.y,  1.0f };
+                    Vector3 gr2 = (Vector3){ pr2.x, pr2.y,  1.0f };
+                    Vector3 gr3 = (Vector3){ pr2.x, pr2.y, -1.0f };
+
+                    // Check ray collision against quad
+                    RayCollision collisionLeft = GetRayCollisionQuad(car.ray[r], gl0, gl1, gl2, gl3);
+                    RayCollision collisionRight = GetRayCollisionQuad(car.ray[r], gr0, gr1, gr2, gr3);
+
+                    if (collisionLeft.hit) { // && (collisionLeft.distance < collisionRight.distance)) {
+                        DrawCircle(collisionLeft.point.x, collisionLeft.point.y, 5.0f, PURPLE);
+                        arrput(collision, collisionLeft);
+                        t = range; // escape for loop
+                    }
+                    if (collisionRight.hit) { //  && (collisionRight.distance < collisionLeft.distance)) {
+                        DrawCircle(collisionRight.point.x, collisionRight.point.y, 5.0f, GREEN);
+                        arrput(collision, collisionRight);
+                        t = range; // escape for loop
+                    }
+                }
+            }
+
+            if (arrlen(collision) > 0) {
+                for (int c = 0; c < arrlen(collision); c++) {
+                    DrawLine(
+                            car.ray[c].position.x,
+                            car.ray[c].position.y,
+                            collision[c].point.x,
+                            collision[c].point.y,
+                            YELLOW);
+                }
+            }
+
+            arrfree(collision);
 
             DrawFPS(20, 20);
         } EndDrawing();

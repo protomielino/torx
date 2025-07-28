@@ -15,7 +15,7 @@ typedef struct
 } car;
 
 car car_ctor();
-void car_build(car *this);
+void car_build(car *this, int n_rays);
 void car_DrawWireFrameModel(car *this, Vector2 car_p_screen, float rot, float sca, Color col);
 
 #endif /* CAR_H_ */
