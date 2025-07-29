@@ -38,7 +38,7 @@ Vector2 startPan = { 0.0f, 0.0f };
 Vector2 selectedCell = { 0.0f, 0.0f };
 
 
-int main(int argc, char **argv)
+int _main(int argc, char **argv)
 {
     // Initialization
     //---------------------------------------------------------------------------------------
@@ -207,7 +207,7 @@ int main(int argc, char **argv)
             // Draw Track
             float res = 0.1f;
             for (float t = 0.0f; t < arrlen(track.path.points); t += res) {
-#if 1
+#if 0
                 Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, t));
                 Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, t));
                 Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, t + res));
