@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <float.h>
+#include <stdint.h>
 
 #include <raylib.h>
 #define RAYMATH_IMPLEMENTATION
@@ -13,6 +14,8 @@
 #define STB_DS_IMPLEMENTATION
 #include "stb_ds.h"
 
+#include "learning/real.h"
+#include "learning/policy.h"
 #include "maths.h"
 #include "spline.h"
 #include "track.h"
@@ -37,11 +40,60 @@ Vector2 startPan = { 0.0f, 0.0f };
 
 Vector2 selectedCell = { 0.0f, 0.0f };
 
+#define MAX_DISTANCE 100.0f
+#define MAX_ACTION 100.0f
 
-int _main(int argc, char **argv)
+int encodeSensors(real sensors[], int n_sensors)
+{
+    // Variabile per il numero intero a 32 bit senza segno
+    uint32_t encodedValue = 0;
+
+    for (int i = 0; i < n_sensors; ++i) {
+        uint8_t norm_dist = (uint8_t) ( (7.0f / MAX_DISTANCE) * sensors[i] );
+        if (norm_dist > 7) {
+            norm_dist = 7;
+        }
+        // Shift e OR per codificare il valore
+        encodedValue |= (norm_dist << (i * 3));
+    }
+
+    return encodedValue;
+}
+
+float* decodeAction(int32_t action, int n_actions)
+{
+    action = 0xFF2D16A3;
+    // Variabile per il numero intero a 32 bit senza segno
+    float *decodedAction = (float*) calloc(n_actions, sizeof(float));
+
+    for (int i = 0; i < n_actions; ++i) {
+        // Shift e AND per decodificare il valore
+        uint8_t decoded = (action >> (i * 7)) & 255;
+
+        decodedAction[i] = (MAX_ACTION / 255.0f) * (float)decoded;
+        if (decodedAction[i] > MAX_ACTION) {
+            decodedAction[i] = MAX_ACTION;
+        }
+    }
+
+    return decodedAction;
+}
+
+
+int main(int argc, char **argv)
 {
     // Initialization
     //---------------------------------------------------------------------------------------
+
+    int episode = 0;
+
+    // Definizione dei parametri
+    const int n_sensors = 5;  // 5 sensori
+    const int n_actions = 4;   // 3 azioni (sterzata, accelerazione, freno) con 3 intensità
+
+    // Creare un'istanza della politica discreta
+    DiscretePolicy* policy = DiscretePolicy_ctor(n_sensors, n_actions, 0.1, 0.8, 0.8, false, 0.1, 0.0);
+
 
     bool go = false;
 
@@ -55,7 +107,7 @@ int _main(int argc, char **argv)
     //----------------------------------------------------------------------------------
     // track-lines
     //----------------------------------------------------------------------------------
-    track track = track_ctor(20);
+    track track = track_ctor(4);
     track_build(&track);
 
     car car = car_ctor();
@@ -142,9 +194,11 @@ int _main(int argc, char **argv)
         if (track.iterations < 0)
             track.iterations = 0;
 
+        int n_path_points = arrlen(track.path.points);
+
         // Check if node is selected with mouse
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-            for (int i = 0; i < arrlen(track.path.points); i++) {
+            for (int i = 0; i < n_path_points; i++) {
                 float d = sqrtf(powf(track.path.points[i].pos.x - mouse_world.x, 2) + powf(track.path.points[i].pos.y - mouse_world.y, 2));
                 if (d < 10.0f) {
                     track.selectedNode = i;
@@ -182,15 +236,15 @@ int _main(int argc, char **argv)
 
         // Calculate track boundary points
         float trackWidth = 10.0f;
-        for (int i = 0; i < arrlen(track.path.points); i++) {
+        int n_points = n_path_points;
+        for (int i = 0; i < n_points; i++) {
             Vector2 p1 = Spline_GetSplinePoint(&track.path, i);
             Vector2 g1 = Spline_GetSplineGradient(&track.path, i);
-            float glen = sqrtf(g1.x*g1.x + g1.y*g1.y);
-
-            track.trackLeft.points[i].pos.x  = p1.x - trackWidth * ( -g1.y / glen );
-            track.trackLeft.points[i].pos.y  = p1.y - trackWidth * (  g1.x / glen );
-            track.trackRight.points[i].pos.x = p1.x + trackWidth * ( -g1.y / glen );
-            track.trackRight.points[i].pos.y = p1.y + trackWidth * (  g1.x / glen );
+            g1 = Vector2Normalize(g1);
+            track.trackLeft.points[i].pos.x  = p1.x - trackWidth * -g1.y;
+            track.trackLeft.points[i].pos.y  = p1.y - trackWidth *  g1.x;
+            track.trackRight.points[i].pos.x = p1.x + trackWidth * -g1.y;
+            track.trackRight.points[i].pos.y = p1.y + trackWidth *  g1.x;
         }
 
         //----------------------------------------------------------------------------------
@@ -205,32 +259,36 @@ int _main(int argc, char **argv)
             //----------------------------------------------------------------------------------
 
             // Draw Track
-            float res = 0.1f;
-            for (float t = 0.0f; t < arrlen(track.path.points); t += res) {
-#if 0
+            float res = 0.01f;
+
+            for (float t = 0.0f; t < n_path_points; t += res) {
+#if 1
                 Vector2 pl1 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, t));
                 Vector2 pr1 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, t));
                 Vector2 pl2 = WorldToScreen(Spline_GetSplinePoint(&track.trackLeft, t + res));
                 Vector2 pr2 = WorldToScreen(Spline_GetSplinePoint(&track.trackRight, t + res));
 
-//                DrawLineV(pr1, pr2, GRAY);
-//                DrawLineV(pl1, pl2, GRAY);
-                DrawTriangleLines((Vector2){pr1.x, pr1.y}, (Vector2){pl1.x, pl1.y}, (Vector2){pr2.x, pr2.y}, GRAY);
-                DrawTriangleLines((Vector2){pl1.x, pl1.y}, (Vector2){pl2.x, pl2.y}, (Vector2){pr2.x, pr2.y}, GRAY);
+                DrawLineV(pl1, pl2, GRAY);
+                DrawLineV(pr1, pr2, GRAY);
+//                DrawTriangleLines((Vector2){pr1.x, pr1.y}, (Vector2){pl1.x, pl1.y}, (Vector2){pr2.x, pr2.y}, GRAY);
+//                DrawTriangleLines((Vector2){pl1.x, pl1.y}, (Vector2){pl2.x, pl2.y}, (Vector2){pr2.x, pr2.y}, GRAY);
 #endif
             }
+
+            int n_racingLine_points = arrlen(track.racingLine.points);
+
             // Reset racing line
-            for (int i = 0; i < arrlen(track.racingLine.points); i++) {
+            for (int i = 0; i < n_racingLine_points; i++) {
                 track.racingLine.points[i] = track.path.points[i];
                 track.displacement[i] = 0;
             }
             Spline_UpdateSplineProperties(&track.racingLine);
 
             for (int n = 0; n < track.iterations; n++) {
-                for (int i = 0; i < arrlen(track.racingLine.points); i++) {
+                for (int i = 0; i < n_racingLine_points; i++) {
                     // Get locations of neighbour nodes
-                    Point2D pointRight = track.racingLine.points[(i + 1) % arrlen(track.racingLine.points)];
-                    Point2D pointLeft = track.racingLine.points[(i + arrlen(track.racingLine.points) - 1) % arrlen(track.racingLine.points)];
+                    Point2D pointRight = track.racingLine.points[(i + 1) % n_racingLine_points];
+                    Point2D pointLeft = track.racingLine.points[(i + n_racingLine_points - 1) % n_racingLine_points];
                     Point2D pointMiddle = track.racingLine.points[i];
 
                     // Create vectors to neighbours
@@ -261,11 +319,12 @@ int _main(int argc, char **argv)
 
                     // Curvature
                     //displacement[(i + 1) % arrlen(racingLine.points)] += dp * -0.2f;
-                    track.displacement[(i - 1 + arrlen(track.racingLine.points)) % arrlen(track.racingLine.points)] += dp * -0.2f;
+                    track.displacement[(i - 1 + n_racingLine_points) % n_racingLine_points] += dp * -0.2f;
                 }
 
                 // Clamp displaced points to track width
-                for (int i = 0; i < arrlen(track.racingLine.points); i++) {
+                int n_racingLine_points = n_racingLine_points;
+                for (int i = 0; i < n_racingLine_points; i++) {
                     if (track.displacement[i] >=  trackWidth)
                         track.displacement[i] =   trackWidth;
                     if (track.displacement[i] <= -trackWidth)
@@ -287,7 +346,7 @@ int _main(int argc, char **argv)
 //            Spline_UpdateSplineProperties(&track.racingLine);
             Spline_DrawSelf(&track.racingLine, 0, 0, YELLOW);
 
-            for (int i = 0; i < arrlen(track.path.points); i++) {
+            for (int i = 0; i < n_path_points; i++) {
                 Vector2 point_world = (Vector2){ track.path.points[i].pos.x, track.path.points[i].pos.y };
                 Vector2 p_screen = WorldToScreen(point_world);
                 DrawCircle(p_screen.x, p_screen.y, 5, RED);
@@ -360,15 +419,54 @@ int _main(int argc, char **argv)
                 }
             }
 
-            if (arrlen(collision) > 0) {
-                for (int c = 0; c < arrlen(collision); c++) {
+            int n_collisions = arrlen(collision);
+            real collision_dist[n_collisions] = {};
+
+            if (n_collisions > 0) {
+                for (int c = 0; c < n_collisions; c++) {
                     DrawLine(
                             car.ray[c].position.x,
                             car.ray[c].position.y,
                             collision[c].point.x,
                             collision[c].point.y,
                             YELLOW);
+
+                    collision_dist[c] = collision[c].distance;
                 }
+
+                // Ottenere lo stato attuale dalla lettura dei sensori
+                // Dobbiamo convertire il vettore di stati in un formato utilizzabile
+                uint32_t state = encodeSensors(collision_dist, n_collisions);
+
+                // Selezionare un'azione in base allo stato attuale
+                int32_t action = DiscretePolicy_SelectAction(policy, state, 0.0, -1);
+
+                float *actions = decodeAction(action, n_actions);
+
+//                accel += actions[0] - MAX_ACTION/2;
+//                brake += actions[1] - MAX_ACTION/2;
+//                stear += actions[2] - MAX_ACTION/2;
+
+//                for (int i = 0; i < n_actions; i++) {
+//                    printf("[%d]%f ", i, actions[i]);
+//                }
+//                printf("\n");
+
+                // Simulazione della ricompensa
+                real reward = (action == 0) ? 1.0 : -1.0; // Ricompensa positiva per l'azione 0, negativa per le altre
+
+                free(actions);
+
+                // Aggiornare la politica con la ricompensa ricevuta
+                DiscretePolicy_SelectAction(policy, state, reward, action);
+
+                // Stampa dell'azione selezionata e della ricompensa
+                printf("Episodio: %d, Sensori: [", episode);
+                for (int i = 0; i < n_sensors; ++i) {
+                    printf(" %f", collision_dist[i]);
+                }
+                printf(" ] \t Azione: %d, Ricompensa: %f\n", action, reward);
+                episode ++;
             }
 
             arrfree(collision);
